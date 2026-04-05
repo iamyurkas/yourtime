@@ -1,98 +1,299 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, Vibration } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const toSeconds = (hours: number, minutes: number, seconds: number) =>
+  hours * 3600 + minutes * 60 + seconds;
+
+const formatClock = (totalSeconds: number) => {
+  const safeSeconds = Math.max(totalSeconds, 0);
+  const hours = Math.floor(safeSeconds / 3600)
+    .toString()
+    .padStart(2, '0');
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = Math.floor(safeSeconds % 60)
+    .toString()
+    .padStart(2, '0');
+
+  return `${hours}:${minutes}:${seconds}`;
+};
+
+type DrumType = 'hours' | 'minutes' | 'seconds';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(1);
+  const [seconds, setSeconds] = useState(0);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const [isRunning, setIsRunning] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(toSeconds(0, 1, 0));
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const periodInSeconds = useMemo(() => toSeconds(hours, minutes, seconds), [hours, minutes, seconds]);
+
+  const playBeep = useCallback(() => {
+    Vibration.vibrate([0, 650, 80, 350]);
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRunning(false);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    stopTimer();
+    setHours(0);
+    setMinutes(1);
+    setSeconds(0);
+    setRemainingSeconds(toSeconds(0, 1, 0));
+  }, [stopTimer]);
+
+  const adjustDrum = (type: DrumType, delta: number) => {
+    if (isRunning) {
+      return;
+    }
+
+    if (type === 'hours') {
+      setHours((value) => clamp(value + delta, 0, 23));
+      return;
+    }
+
+    if (type === 'minutes') {
+      setMinutes((value) => clamp(value + delta, 0, 59));
+      return;
+    }
+
+    setSeconds((value) => clamp(value + delta, 0, 59));
+  };
+
+  const handleStart = () => {
+    if (periodInSeconds <= 0) {
+      return;
+    }
+
+    setRemainingSeconds(periodInSeconds);
+    setIsRunning(true);
+  };
+
+  useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
+
+    if (periodInSeconds <= 0) {
+      stopTimer();
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setRemainingSeconds((previous) => {
+        if (previous <= 1) {
+          playBeep();
+          return periodInSeconds;
+        }
+
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isRunning, periodInSeconds, playBeep, stopTimer]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      setRemainingSeconds(periodInSeconds);
+    }
+  }, [isRunning, periodInSeconds]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <View style={styles.screen}>
+      <Text style={styles.title}>YourTime • Метроном</Text>
+      <Text style={styles.subtitle}>
+        Виставляй інтервал барабанами, запускай і отримуй довший і сильніший пік (вібро) кожен цикл.
+      </Text>
+
+      <View style={styles.drumsRow}>
+        {[
+          { label: 'ГГ', value: hours, type: 'hours' as const },
+          { label: 'ХХ', value: minutes, type: 'minutes' as const },
+          { label: 'СС', value: seconds, type: 'seconds' as const },
+        ].map((item) => (
+          <View key={item.type} style={styles.drumColumn}>
+            <Pressable style={styles.smallButton} onPress={() => adjustDrum(item.type, 1)}>
+              <Text style={styles.smallButtonText}>＋</Text>
+            </Pressable>
+
+            <View style={styles.drumValueBox}>
+              <Text style={styles.drumValue}>{item.value.toString().padStart(2, '0')}</Text>
+              <Text style={styles.drumLabel}>{item.label}</Text>
+            </View>
+
+            <Pressable style={styles.smallButton} onPress={() => adjustDrum(item.type, -1)}>
+              <Text style={styles.smallButtonText}>－</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.countdownCard}>
+        <Text style={styles.countdownLabel}>Alert repeat every {formatClock(periodInSeconds)}</Text>
+        <Text style={styles.countdownMeta}>Countdown</Text>
+        <Text style={styles.countdownValue}>{formatClock(remainingSeconds)}</Text>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <Pressable style={[styles.actionButton, styles.startButton]} onPress={handleStart}>
+          <Text style={styles.actionButtonText}>Запустити</Text>
+        </Pressable>
+
+        <Pressable style={[styles.actionButton, styles.stopButton]} onPress={stopTimer}>
+          <Text style={styles.actionButtonText}>Зупинити</Text>
+        </Pressable>
+
+        <Pressable style={[styles.actionButton, styles.deleteButton]} onPress={resetTimer}>
+          <Text style={styles.actionButtonText}>Видалити</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.statusText}>{isRunning ? 'Статус: працює' : 'Статус: зупинено'}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  screen: {
+    flex: 1,
+    backgroundColor: '#08090b',
+    paddingHorizontal: 18,
+    paddingVertical: 24,
+    gap: 18,
+  },
+  title: {
+    color: '#f5f7ff',
+    fontSize: 26,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  subtitle: {
+    color: '#96a0bd',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  drumsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 8,
+  },
+  drumColumn: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  drumValueBox: {
+    width: '100%',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#222739',
+    backgroundColor: '#11131a',
+    paddingVertical: 18,
+    alignItems: 'center',
+    gap: 4,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  drumValue: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#e9edff',
+  },
+  drumLabel: {
+    fontSize: 12,
+    letterSpacing: 0.8,
+    color: '#7982a1',
+  },
+  smallButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#171a26',
+    borderWidth: 1,
+    borderColor: '#2a3043',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  smallButtonText: {
+    color: '#d9deef',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  countdownCard: {
+    backgroundColor: '#11141e',
+    borderColor: '#252c40',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6,
+  },
+  countdownLabel: {
+    color: '#8d97b6',
+    fontSize: 13,
+  },
+  countdownMeta: {
+    color: '#d4d9ea',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  countdownValue: {
+    color: '#f2f5ff',
+    fontSize: 38,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: '#1f9d55',
+  },
+  stopButton: {
+    backgroundColor: '#e0b400',
+  },
+  deleteButton: {
+    backgroundColor: '#8b3141',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  statusText: {
+    color: '#a5aec8',
+    fontSize: 14,
   },
 });
