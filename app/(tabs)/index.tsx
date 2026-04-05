@@ -105,6 +105,7 @@ export default function TimerScreen() {
   useEffect(() => {
     void setAudioModeAsync({
       playsInSilentMode: true,
+      shouldPlayInBackground: true,
     });
   }, []);
 
