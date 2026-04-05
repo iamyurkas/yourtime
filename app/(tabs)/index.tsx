@@ -36,7 +36,7 @@ export default function HomeScreen() {
   const periodInSeconds = useMemo(() => toSeconds(hours, minutes, seconds), [hours, minutes, seconds]);
 
   const playBeep = useCallback(() => {
-    Vibration.vibrate(500);
+    Vibration.vibrate([0, 650, 80, 350]);
   }, []);
 
   const stopTimer = useCallback(() => {
@@ -129,7 +129,7 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <Text style={styles.title}>YourTime • Метроном</Text>
       <Text style={styles.subtitle}>
-        Виставляй інтервал барабанами, запускай і отримуй короткий пік (вібро 0.5с) кожен цикл.
+        Виставляй інтервал барабанами, запускай і отримуй довший і сильніший пік (вібро) кожен цикл.
       </Text>
 
       <View style={styles.drumsRow}>
@@ -156,7 +156,8 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.countdownCard}>
-        <Text style={styles.countdownLabel}>Залишилось до піку</Text>
+        <Text style={styles.countdownLabel}>Alert repeat every {formatClock(periodInSeconds)}</Text>
+        <Text style={styles.countdownMeta}>Countdown</Text>
         <Text style={styles.countdownValue}>{formatClock(remainingSeconds)}</Text>
       </View>
 
@@ -255,6 +256,12 @@ const styles = StyleSheet.create({
     color: '#8d97b6',
     fontSize: 13,
   },
+  countdownMeta: {
+    color: '#d4d9ea',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   countdownValue: {
     color: '#f2f5ff',
     fontSize: 38,
@@ -272,10 +279,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButton: {
-    backgroundColor: '#2f7dff',
+    backgroundColor: '#1f9d55',
   },
   stopButton: {
-    backgroundColor: '#50586f',
+    backgroundColor: '#e0b400',
   },
   deleteButton: {
     backgroundColor: '#8b3141',
