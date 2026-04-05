@@ -1,7 +1,10 @@
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
+import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   ListRenderItemInfo,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +13,6 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 
 type TimeUnit = 'hours' | 'minutes' | 'seconds';
 
@@ -37,9 +39,11 @@ function WheelPicker({ label, max, value, onChange }: WheelPickerProps) {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const next = Math.round(event.nativeEvent.contentOffset.y / ITEM_HEIGHT);
       const safe = Math.max(0, Math.min(max, next));
+
       if (safe !== value) {
         onChange(safe);
       }
+
       listRef.current?.scrollToOffset({ offset: safe * ITEM_HEIGHT, animated: false });
     },
     [max, onChange, value],
@@ -96,6 +100,14 @@ export default function TimerScreen() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextTriggerRef = useRef<number | null>(null);
 
+  const beepPlayer = useAudioPlayer(require('../../assets/sounds/beep.mp3'));
+
+  useEffect(() => {
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+    });
+  }, []);
+
   const intervalMs = useMemo(() => {
     const totalSeconds = hours * 3600 + minutes * 60 + seconds;
     return totalSeconds * 1000;
@@ -106,31 +118,53 @@ export default function TimerScreen() {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+
     nextTriggerRef.current = null;
+    Vibration.cancel();
   }, []);
 
   const playSignal = useCallback(async () => {
-    Vibration.vibrate([0, 500, 120, 500], false);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-  }, []);
+    try {
+      beepPlayer.seekTo(0);
+      beepPlayer.play();
+    } catch (error) {
+      console.warn('Failed to play beep sound:', error);
+    }
 
-  const scheduleNext = useCallback(async () => {
+    Vibration.cancel();
+    Vibration.vibrate([0, 700, 120, 700], false);
+
+    try {
+      if (Platform.OS === 'android') {
+        await Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm);
+        await Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+    } catch (error) {
+      console.warn('Failed to trigger haptics:', error);
+    }
+  }, [beepPlayer]);
+
+  const scheduleNext = useCallback(() => {
     const nextTrigger = nextTriggerRef.current;
+
     if (!nextTrigger || intervalMs <= 0 || !isRunning) {
       return;
     }
 
-    const now = Date.now();
-    const delay = Math.max(0, nextTrigger - now);
+    const currentNow = Date.now();
+    const delay = Math.max(0, nextTrigger - currentNow);
 
-    timeoutRef.current = setTimeout(async () => {
-      await playSignal();
+    timeoutRef.current = setTimeout(() => {
+      void playSignal();
       setCycles((prev) => prev + 1);
 
       const target = (nextTriggerRef.current ?? Date.now()) + intervalMs;
       nextTriggerRef.current = target;
-      await scheduleNext();
+      scheduleNext();
     }, delay);
   }, [intervalMs, isRunning, playSignal]);
 
@@ -140,7 +174,7 @@ export default function TimerScreen() {
     }
 
     nextTriggerRef.current = Date.now() + intervalMs;
-    void scheduleNext();
+    scheduleNext();
 
     return clearSchedule;
   }, [clearSchedule, intervalMs, isRunning, scheduleNext]);
@@ -168,6 +202,7 @@ export default function TimerScreen() {
     if (intervalMs <= 0) {
       return;
     }
+
     setCycles(0);
     setNow(Date.now());
     setIsRunning(true);
@@ -185,6 +220,7 @@ export default function TimerScreen() {
     setMinutes(0);
     setSeconds(0);
     setCycles(0);
+    setNow(Date.now());
   };
 
   const updateUnit = (unit: TimeUnit, value: number) => {
@@ -202,27 +238,21 @@ export default function TimerScreen() {
   const remainingHours = Math.floor(remainingMs / 3_600_000);
   const remainingMinutes = Math.floor((remainingMs % 3_600_000) / 60_000);
   const remainingSeconds = Math.floor((remainingMs + 999) / 1000) % 60;
-  const countdown = `${String(remainingHours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+
+  const countdown = `${String(remainingHours).padStart(2, '0')}:${String(remainingMinutes).padStart(
+    2,
+    '0',
+  )}:${String(remainingSeconds).padStart(2, '0')}`;
 
   return (
     <View style={styles.screen}>
       <Text style={styles.title}>Interval Metronome</Text>
-      <Text style={styles.subtitle}>Choose HH : MM : SS and run periodic alerts.</Text>
+      <Text style={styles.subtitle}>Choose and run periodic alerts.</Text>
 
       <View style={styles.wheelsRow}>
         <WheelPicker label="HH" max={23} value={hours} onChange={(value) => updateUnit('hours', value)} />
-        <WheelPicker
-          label="MM"
-          max={59}
-          value={minutes}
-          onChange={(value) => updateUnit('minutes', value)}
-        />
-        <WheelPicker
-          label="SS"
-          max={59}
-          value={seconds}
-          onChange={(value) => updateUnit('seconds', value)}
-        />
+        <WheelPicker label="MM" max={59} value={minutes} onChange={(value) => updateUnit('minutes', value)} />
+        <WheelPicker label="SS" max={59} value={seconds} onChange={(value) => updateUnit('seconds', value)} />
       </View>
 
       <Text style={styles.hint}>
@@ -230,6 +260,7 @@ export default function TimerScreen() {
           ? `Alert repeats every ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
           : 'Set a non-zero interval to start'}
       </Text>
+
       <Text style={styles.countdown}>
         {isRunning ? `Next alert in: ${countdown}` : 'Next alert in: --:--:--'}
       </Text>
@@ -240,12 +271,19 @@ export default function TimerScreen() {
         <Pressable
           style={[styles.button, styles.startButton, (!hasInterval || isRunning) && styles.buttonDisabled]}
           onPress={onStart}
-          disabled={!hasInterval || isRunning}>
+          disabled={!hasInterval || isRunning}
+        >
           <Text style={styles.buttonText}>Start</Text>
         </Pressable>
-        <Pressable style={[styles.button, styles.stopButton, !isRunning && styles.buttonDisabled]} onPress={onStop} disabled={!isRunning}>
+
+        <Pressable
+          style={[styles.button, styles.stopButton, !isRunning && styles.buttonDisabled]}
+          onPress={onStop}
+          disabled={!isRunning}
+        >
           <Text style={styles.buttonText}>Stop</Text>
         </Pressable>
+
         <Pressable style={[styles.button, styles.dangerButton]} onPress={onReset}>
           <Text style={styles.buttonText}>Delete</Text>
         </Pressable>
