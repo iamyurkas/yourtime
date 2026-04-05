@@ -1,5 +1,9 @@
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
+import {
+  activateKeepAwakeAsync,
+  deactivateKeepAwake,
+} from 'expo-keep-awake';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -22,6 +26,8 @@ type WheelPickerProps = {
   value: number;
   onChange: (value: number) => void;
 };
+
+const TIMER_KEEP_AWAKE_TAG = 'timer-screen';
 
 const ITEM_HEIGHT = 52;
 const VISIBLE_ITEMS = 5;
@@ -211,6 +217,19 @@ export default function TimerScreen() {
     }, 250);
 
     return () => clearInterval(ticker);
+  }, [isRunning]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      void deactivateKeepAwake(TIMER_KEEP_AWAKE_TAG);
+      return;
+    }
+
+    void activateKeepAwakeAsync(TIMER_KEEP_AWAKE_TAG);
+
+    return () => {
+      void deactivateKeepAwake(TIMER_KEEP_AWAKE_TAG);
+    };
   }, [isRunning]);
 
   const onStart = () => {
