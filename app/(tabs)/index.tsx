@@ -127,6 +127,11 @@ export default function TimerScreen() {
   const playSignal = useCallback(async () => {
     try {
       beepPlayer.seekTo(0);
+    } catch (error) {
+      console.warn('Failed to rewind beep sound:', error);
+    }
+
+    try {
       beepPlayer.play();
     } catch (error) {
       console.warn('Failed to play beep sound:', error);
