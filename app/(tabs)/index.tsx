@@ -110,7 +110,8 @@ export default function TimerScreen() {
   }, []);
 
   const playSignal = useCallback(async () => {
-    Vibration.vibrate([0, 350, 80, 350], false);
+    Vibration.vibrate([0, 500, 120, 500], false);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
