@@ -91,6 +91,7 @@ export default function TimerScreen() {
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [cycles, setCycles] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextTriggerRef = useRef<number | null>(null);
@@ -109,8 +110,8 @@ export default function TimerScreen() {
   }, []);
 
   const playSignal = useCallback(async () => {
-    Vibration.vibrate(500);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Vibration.vibrate([0, 350, 80, 350], false);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, []);
 
   const scheduleNext = useCallback(async () => {
@@ -150,11 +151,24 @@ export default function TimerScreen() {
     [clearSchedule],
   );
 
+  useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
+
+    const ticker = setInterval(() => {
+      setNow(Date.now());
+    }, 250);
+
+    return () => clearInterval(ticker);
+  }, [isRunning]);
+
   const onStart = () => {
     if (intervalMs <= 0) {
       return;
     }
     setCycles(0);
+    setNow(Date.now());
     setIsRunning(true);
   };
 
@@ -183,6 +197,11 @@ export default function TimerScreen() {
   };
 
   const hasInterval = intervalMs > 0;
+  const remainingMs = Math.max(0, (nextTriggerRef.current ?? now) - now);
+  const remainingHours = Math.floor(remainingMs / 3_600_000);
+  const remainingMinutes = Math.floor((remainingMs % 3_600_000) / 60_000);
+  const remainingSeconds = Math.floor((remainingMs + 999) / 1000) % 60;
+  const countdown = `${String(remainingHours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
 
   return (
     <View style={styles.screen}>
@@ -210,17 +229,20 @@ export default function TimerScreen() {
           ? `Alert repeats every ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
           : 'Set a non-zero interval to start'}
       </Text>
+      <Text style={styles.countdown}>
+        {isRunning ? `Next alert in: ${countdown}` : 'Next alert in: --:--:--'}
+      </Text>
 
       <Text style={styles.cycles}>Completed intervals: {cycles}</Text>
 
       <View style={styles.actions}>
         <Pressable
-          style={[styles.button, (!hasInterval || isRunning) && styles.buttonDisabled]}
+          style={[styles.button, styles.startButton, (!hasInterval || isRunning) && styles.buttonDisabled]}
           onPress={onStart}
           disabled={!hasInterval || isRunning}>
           <Text style={styles.buttonText}>Start</Text>
         </Pressable>
-        <Pressable style={[styles.button, !isRunning && styles.buttonDisabled]} onPress={onStop} disabled={!isRunning}>
+        <Pressable style={[styles.button, styles.stopButton, !isRunning && styles.buttonDisabled]} onPress={onStop} disabled={!isRunning}>
           <Text style={styles.buttonText}>Stop</Text>
         </Pressable>
         <Pressable style={[styles.button, styles.dangerButton]} onPress={onReset}>
@@ -307,6 +329,13 @@ const styles = StyleSheet.create({
     marginTop: 24,
     fontSize: 14,
   },
+  countdown: {
+    color: '#E9EDF5',
+    textAlign: 'center',
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   cycles: {
     color: '#8E97A9',
     textAlign: 'center',
@@ -319,10 +348,16 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    backgroundColor: '#3A8DFF',
+    backgroundColor: '#2A3342',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: '#2BAE66',
+  },
+  stopButton: {
+    backgroundColor: '#E7B416',
   },
   dangerButton: {
     backgroundColor: '#D34B58',
