@@ -161,9 +161,18 @@ export default function TimerScreen() {
 
     timeoutRef.current = setTimeout(() => {
       void playSignal();
-      setCycles((prev) => prev + 1);
+      const nowTs = Date.now();
+      const scheduledTrigger = nextTriggerRef.current ?? nowTs;
+      let completedIntervals = 1;
+      let target = scheduledTrigger + intervalMs;
 
-      const target = (nextTriggerRef.current ?? Date.now()) + intervalMs;
+      if (target <= nowTs) {
+        const skippedIntervals = Math.floor((nowTs - target) / intervalMs) + 1;
+        completedIntervals += skippedIntervals;
+        target += skippedIntervals * intervalMs;
+      }
+
+      setCycles((prev) => prev + completedIntervals);
       nextTriggerRef.current = target;
       scheduleNext();
     }, delay);
